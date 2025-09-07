@@ -20,6 +20,7 @@ use crate::error::{bad_request_error, database_error, internal_error};
 ///
 ///   list_users()   ::     GET   /users
 ///   create_user()  ::    POST   /users
+///   get_user()     ::     GET   /users/{id}
 ///   update_user()  ::   PATCH   /users/{id}
 ///   delete_user()  ::  DELETE   /users/{id}
 ///
@@ -29,6 +30,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(list_users))
         .route("/", post(create_user))
+        .route("/{id}", get(get_user))
         .route("/{id}", patch(update_user))
         .route("/{id}", delete(delete_user))
 }
@@ -46,6 +48,27 @@ pub async fn list_users(
     let records: Vec<UserRecord> = users.load(&mut conn).await.map_err(database_error)?;
     let data: Vec<User> = records.into_iter().map(|record| record.into()).collect();
     Ok(Json(data))
+}
+
+/// GET /users/{id}
+///
+/// Returns a single user by ID.
+pub async fn get_user(
+    State(app_state): State<AppState>,
+    Extension(_current_user): Extension<UserContext>,
+    Path(id): Path<String>,
+) -> Result<Json<User>, (StatusCode, String)> {
+    use crate::schema::users::dsl::{id as user_id, users};
+
+    let mut conn = app_state.db_pool.get().await.map_err(internal_error)?;
+    let record: UserRecord = users
+        .filter(user_id.eq(id))
+        .first(&mut conn)
+        .await
+        .map_err(database_error)?;
+
+    let user: User = record.into();
+    Ok(Json(user))
 }
 
 /// POST /users
@@ -126,5 +149,3 @@ pub async fn delete_user(
     let user: User = record.into();
     Ok(Json(user))
 }
-
-//
