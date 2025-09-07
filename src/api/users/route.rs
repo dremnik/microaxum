@@ -6,8 +6,6 @@ use axum::response::Json;
 use axum::routing::{delete, get, patch, post};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use tokio::time::Instant;
-use tracing::info;
 use validator::Validate;
 
 use crate::app::AppState;
@@ -49,6 +47,7 @@ pub async fn list_users(
     let mut conn = app_state.db_pool.get().await.map_err(internal_error)?;
     let records: Vec<UserRecord> = users.load(&mut conn).await.map_err(database_error)?;
     let data: Vec<User> = records.into_iter().map(|record| record.into()).collect();
+
     Ok(Json(data))
 }
 
@@ -62,30 +61,16 @@ pub async fn get_user(
 ) -> Result<Json<User>, (StatusCode, String)> {
     use crate::schema::users::dsl::{id as user_id, users};
 
-    let t0 = Instant::now();
     let mut conn = app_state.db_pool.get().await.map_err(internal_error)?;
-    let t1 = Instant::now();
 
     let record: UserRecord = users
         .filter(user_id.eq(id))
         .first(&mut conn)
         .await
         .map_err(database_error)?;
-    let t2 = Instant::now();
 
     let user: User = record.into();
-    let resp = Json(user);
-    let t3 = Instant::now();
-
-    info!(
-        checkout_ms = ?t1.duration_since(t0),
-        query_ms    = ?t2.duration_since(t1),
-        json_ms     = ?t3.duration_since(t2),
-        total_ms    = ?t3.duration_since(t0),
-        "timings"
-    );
-
-    Ok(resp)
+    Ok(Json(user))
 }
 
 /// POST /users
