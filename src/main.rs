@@ -2,9 +2,9 @@ use std::env;
 use std::net::SocketAddr;
 
 use axum::Router;
-use diesel_async::AsyncPgConnection;
-use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::deadpool::Pool;
+use diesel_async::pooled_connection::{AsyncDieselConnectionManager, RecyclingMethod};
+use diesel_async::{AsyncPgConnection, pooled_connection::ManagerConfig};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::app::{AppState, build_api_router, build_public_router};
@@ -40,9 +40,14 @@ async fn main() {
         panic!("DATABASE_URL must be set");
     });
 
-    let config = AsyncDieselConnectionManager::<AsyncPgConnection>::new(database_url);
+    // Don't send test queries when connections are recycled (override default)
+    let mut config = ManagerConfig::default();
+    config.recycling_method = RecyclingMethod::Fast;
 
-    let pool = match Pool::builder(config).max_size(MAX_DB_CONNECTIONS).build() {
+    let mgr =
+        AsyncDieselConnectionManager::<AsyncPgConnection>::new_with_config(database_url, config);
+
+    let pool = match Pool::builder(mgr).max_size(MAX_DB_CONNECTIONS).build() {
         Ok(pool) => {
             tracing::info!("Database connection pool successfully created");
             pool
